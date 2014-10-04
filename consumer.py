@@ -1,4 +1,5 @@
 ''' Consumer for St Cloud State University '''
+from __future__ import unicode_literals
 
 import requests
 from datetime import date, timedelta, datetime
@@ -18,26 +19,40 @@ NAMESPACES = {'dc': 'http://purl.org/dc/elements/1.1/',
               'oai_dc': 'http://www.openarchives.org/OAI/2.0/',
               'ns0': 'http://www.openarchives.org/OAI/2.0/'
               }
+DEFAULT_ENCODING = 'UTF-8'
 
+record_encoding = None
 
-def consume(days_back=5):
+def copy_to_unicode(element):
+
+    encoding = record_encoding or DEFAULT_ENCODING
+    element = ''.join(element)
+    if isinstance(element, unicode):
+        return element
+    else:
+        return unicode(element, encoding=encoding)
+
+def consume(days_back=2):
     start_date = TODAY - timedelta(days_back)
     base_url = OAI_DC_BASE_URL + '?verb=ListRecords&metadataPrefix=oai_dc&from='
     url = base_url + str(start_date) + 'T00:00:00Z'
+    record_encoding_request = requests.get(url)
+    record_encoding = record_encoding_request.encoding
     records = get_records(url)
 
     xml_list = []
     for record in records:
         doc_id = record.xpath('ns0:header/ns0:identifier/node()', namespaces=NAMESPACES)[0]
-        record_string = etree.tostring(record)
-        record_string = '<?xml version="1.0" encoding="UTF-8"?>\n' + record_string
+        print doc_id
+        record_string = etree.tostring(record, encoding=record_encoding)
         xml_list.append(RawDocument({
             'doc': record_string,
             'source': NAME,
-            'docID': doc_id,
+            'docID': copy_to_unicode(doc_id),
             'filetype': 'xml'
         }))
 
+    print "GOT THRU CONSUME"
     return xml_list
 
 
@@ -120,6 +135,7 @@ def get_date_updated(record):
 
 
 def normalize(raw_doc, timestamp):
+    print "STARTED NORMALIZE"
     doc = raw_doc.get('doc')
 
     record = etree.XML(doc)
@@ -129,6 +145,8 @@ def normalize(raw_doc, timestamp):
         approved_series = [word.replace('\n', '') for word in series_names]
     set_spec = record.xpath('ns0:header/ns0:setSpec/node()', namespaces=NAMESPACES)[0]
     if set_spec.replace('publication:', '') not in approved_series:
+        print "-----not in approved"
+        print set_spec
         return None
 
     title = record.xpath('//dc:title/node()', namespaces=NAMESPACES)[0]
