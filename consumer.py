@@ -43,7 +43,6 @@ def consume(days_back=2):
     xml_list = []
     for record in records:
         doc_id = record.xpath('ns0:header/ns0:identifier/node()', namespaces=NAMESPACES)[0]
-        print doc_id
         record_string = etree.tostring(record, encoding=record_encoding)
         xml_list.append(RawDocument({
             'doc': record_string,
@@ -52,7 +51,6 @@ def consume(days_back=2):
             'filetype': 'xml'
         }))
 
-    print "GOT THRU CONSUME"
     return xml_list
 
 
@@ -91,7 +89,7 @@ def get_contributors(record):
 
 def get_tags(record):
     tags = record.xpath('//dc:subject/node()', namespaces=NAMESPACES)
-    return [tag.lower() for tag in tags]
+    return [copy_to_unicode(tag.lower()) for tag in tags]
 
 
 def get_ids(record, doc):
@@ -103,7 +101,7 @@ def get_ids(record, doc):
             url = identifier
     if url is '':
         raise Exception('Warning: No url provided!')
-    return {'serviceID': serviceID, 'url': url, 'doi': ''}
+    return {'serviceID': serviceID, 'url': copy_to_unicode(url), 'doi': ''}
 
 
 def get_properties(record):
@@ -113,11 +111,11 @@ def get_properties(record):
     dcformat = (record.xpath('//dc:format/node()', namespaces=NAMESPACES) or [''])[0]
     props = {
         'publisherInfo': {
-            'publisher': publisher,
+            'publisher': copy_to_unicode(publisher),
         },
-        'source': source,
-        'type': dctype,
-        'format': dcformat,
+        'source': copy_to_unicode(source),
+        'type': copy_to_unicode(dctype),
+        'format': copy_to_unicode(dcformat),
     }
     return props
 
@@ -125,17 +123,16 @@ def get_properties(record):
 def get_date_created(record):
     date_created = (record.xpath('ns0:metadata/oai_dc:dc/dc:date/node()', namespaces=NAMESPACES) or [''])[0]
     a_date = parse(date_created, yearfirst=True,  default=DEFAULT).isoformat()
-    return a_date
+    return copy_to_unicode(a_date)
 
 
 def get_date_updated(record):
     dateupdated = (record.xpath('//ns0:datestamp/node()', namespaces=NAMESPACES) or [''])[0]
     date_updated = parse(dateupdated).isoformat()
-    return date_updated
+    return copy_to_unicode(date_updated)
 
 
 def normalize(raw_doc, timestamp):
-    print "STARTED NORMALIZE"
     doc = raw_doc.get('doc')
 
     record = etree.XML(doc)
@@ -145,24 +142,22 @@ def normalize(raw_doc, timestamp):
         approved_series = [word.replace('\n', '') for word in series_names]
     set_spec = record.xpath('ns0:header/ns0:setSpec/node()', namespaces=NAMESPACES)[0]
     if set_spec.replace('publication:', '') not in approved_series:
-        print "-----not in approved"
-        print set_spec
         return None
 
     title = record.xpath('//dc:title/node()', namespaces=NAMESPACES)[0]
     description = (record.xpath('//dc:description/node()', namespaces=NAMESPACES) or [''])[0]
 
     payload = {
-        'title': title,
+        'title': copy_to_unicode(title),
         'contributors': get_contributors(record),
         'properties': get_properties(record),
-        'description': description,
+        'description': copy_to_unicode(description),
         'tags': get_tags(record),
-        'id': get_ids(record,raw_doc),
+        'id': get_ids(record, raw_doc),
         'source': NAME,
         'dateUpdated': get_date_updated(record),
         'dateCreated': get_date_created(record),
-        'timestamp': str(timestamp),
+        'timestamp': timestamp,
     }
 
     #import json
